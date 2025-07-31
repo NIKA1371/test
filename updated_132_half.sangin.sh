@@ -147,17 +147,33 @@ fi
 log "Creating poststart.sh..."
 cat > poststart.sh <<EOF
 #!/bin/bash
-# بارگذاری ماژول tun
-modprobe tun
 
-# تلاش برای ایجاد رابط TUN (wtun0) به‌طور اجباری
+# بارگذاری ماژول tun اگر بارگذاری نشده باشد
+if ! lsmod | grep -q "^tun"; then
+    modprobe tun
+fi
+
+# حذف رابط wtun0 در صورت وجود
+ip link delete wtun0 2>/dev/null || true
+
+# ایجاد رابط wtun0 به صورت قطعی
 for i in {1..10}; do
-    ip tuntap add dev wtun0 mode tun 2>/dev/null && break
+    ip tuntap add dev wtun0 mode tun 2>/dev/null
+    if ip link show wtun0 &>/dev/null; then
+        echo "wtun0 successfully created."
+        break
+    fi
     sleep 1
 done
 
-# اطمینان از فعال شدن رابط
-ip link set dev wtun0 up || true
+# اگر رابط wtun0 ایجاد نشد، نمایش پیغام خطا
+if ! ip link show wtun0 &>/dev/null; then
+    echo "❌ Failed to create wtun0 after 10 attempts."
+    exit 1
+fi
+
+# فعال کردن رابط wtun0
+ip link set dev wtun0 up
 
 # تنظیم MTU برای eth0 و wtun0
 ip link set dev eth0 mtu 1420 || true
